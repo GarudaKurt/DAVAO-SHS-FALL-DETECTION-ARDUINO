@@ -142,13 +142,10 @@ void loop() {
     Serial.println(payload);
     lora.sendNotify(payload);
   }
-
-  // Broker publish (booleans only, to patient/status -> Node-RED -> Supabase):
-  //   alertActive (SOS, fall button, or MPU fall)  -> hasFall = true
-  //   sensorFallActive (MPU6050 fall only)         -> enabled_sensor = true
-  // lastFallAlert is only set when the MPU6050 detects a fall, so it identifies the sensor event.
-  const bool sensorFallActive = lastFallAlert != 0 && (now - lastFallAlert) < ALERT_DISPLAY_MS;
-  mqttBroker.updatePatientStatus(alertActive, sensorFallActive);
+  
+  // enabled_sensor describes MPU6050 availability; enabledAlert describes
+  // the current patient alert state. Both values are serialized as booleans.
+  mqttBroker.updatePatientStatus(alertActive, mpuReady);
 
   delay(5);
 }

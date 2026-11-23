@@ -6,16 +6,19 @@ Controller::Controller(const char* wifiSsid, const char* wifiPassword)
 void Controller::begin() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
-  WiFi.begin(ssid, password);  // Non-blocking.
+  WiFi.begin(ssid, password); 
   client.setServer(MQTT_SERVER, MQTT_PORT);
   client.setBufferSize(256);
+  // Keep failed broker attempts short so the sensor/LoRa loop can continue.
+  client.setSocketTimeout(1);
+  client.setKeepAlive(15);
 }
 
 bool Controller::ensureMqtt() {
   if (client.connected() || !wifiConnected()) return client.connected();
 
   const unsigned long now = millis();
-  if (now - lastReconnectAttempt < 5000UL) return false;
+  if (now - lastReconnectAttempt < MQTT_RECONNECT_INTERVAL_MS) return false;
   lastReconnectAttempt = now;
 
   String clientId = String(DEVICE_ID) + "-" +
@@ -24,7 +27,7 @@ bool Controller::ensureMqtt() {
 
   if (client.connect(clientId.c_str())) {
     Serial.println("[MQTT] connected");
-    haveReportedSensor = false;   // resend the sensor state after reconnecting
+    haveReportedSensor = false;
     return true;
   }
 
@@ -38,7 +41,6 @@ void Controller::loop() {
 }
 
 void Controller::updatePatientStatus(bool enabledAlert, bool enabledSensor) {
-  // Detect alert start/end first, even while offline, so events are queued and not lost.
   if (enabledAlert && !lastAlert) {
     pendingFall = true;
     pendingClear = false;
@@ -58,7 +60,7 @@ void Controller::updatePatientStatus(bool enabledAlert, bool enabledSensor) {
 
   StaticJsonDocument<128> doc;
   doc["device_id"] = DEVICE_ID;
-  if (pendingFall) doc["hasFall"] = true;          // boolean; the app clears it
+  if (pendingFall) doc["hasFall"] = true;       
   else if (pendingClear) doc["hasFall"] = false;
   if (sensorChanged) doc["enabled_sensor"] = enabledSensor;
 
@@ -66,7 +68,7 @@ void Controller::updatePatientStatus(bool enabledAlert, bool enabledSensor) {
   const size_t n = serializeJson(doc, payload, sizeof(payload));
   if (n == 0 || n >= sizeof(payload)) return;
 
-  if (!client.publish(STATUS_TOPIC, payload)) {    // not retained
+  if (!client.publish(STATUS_TOPIC, payload)) { 
     lastStatusFailure = now;
     Serial.println("[MQTT] patient status publish failed, will retry");
     return;

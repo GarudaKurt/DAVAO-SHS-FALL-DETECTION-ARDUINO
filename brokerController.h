@@ -26,10 +26,9 @@ class Controller {
   const char* STATUS_TOPIC = "patient/status";
   const char* DEVICE_ID = "esp32-01";
 
-  // false: only the web app clears hasFall.
-  // true: the device also sends hasFall=false when the local alert ends.
   static constexpr bool AUTO_CLEAR_FALL = false;
   static constexpr unsigned long RETRY_MS = 1000;
+  static constexpr unsigned long MQTT_RECONNECT_INTERVAL_MS = 5000;
 
   unsigned long lastReconnectAttempt = 0;
   unsigned long lastStatusFailure = 0;
