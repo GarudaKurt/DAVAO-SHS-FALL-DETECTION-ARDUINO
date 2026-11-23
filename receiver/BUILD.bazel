@@ -1,0 +1,8 @@
+load(":arduino.bzl", "arduino_sketch")
+
+# Set the board when invoking Bazel, for example:
+#   bazel build //:receiver --define fqbn=arduino:avr:uno
+arduino_sketch(
+    name = "receiver",
+    srcs = glob(["**/*.ino", "**/*.h", "**/*.hpp", "**/*.c", "**/*.cpp"]),
+)
