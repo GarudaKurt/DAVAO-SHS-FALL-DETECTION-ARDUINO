@@ -13,32 +13,31 @@ class Controller {
   void loop();
   bool connected() { return client.connected(); }
   bool wifiConnected() const { return WiFi.status() == WL_CONNECTED; }
+  // Same signature as before. enabledAlert is mapped to the hasFall column.
   void updatePatientStatus(bool enabledAlert, bool enabledSensor);
-  void publishFallEvent(const char* sourcePayload);
 
  private:
   bool ensureMqtt();
-  bool publishPendingEvent();
 
   const char* ssid;
   const char* password;
   const char* MQTT_SERVER = "broker.hivemq.com";
   const uint16_t MQTT_PORT = 1883;
   const char* STATUS_TOPIC = "patient/status";
-  const char* EVENT_TOPIC = "patient/events";
   const char* DEVICE_ID = "esp32-01";
 
+  // false: only the web app clears hasFall.
+  // true: the device also sends hasFall=false when the local alert ends.
+  static constexpr bool AUTO_CLEAR_FALL = false;
   static constexpr unsigned long RETRY_MS = 1000;
-  unsigned long lastReconnectAttempt = 0;
-  unsigned long lastEventFailure = 0;
-  unsigned long lastStatusFailure = 0;
-  bool reportedAlert = false;
-  bool reportedSensor = false;
-  bool haveReportedStatus = false;
 
-  bool eventPending = false;
-  char pendingSourcePayload[128] = {};
-  char lastPublishedEvent[128] = {};
+  unsigned long lastReconnectAttempt = 0;
+  unsigned long lastStatusFailure = 0;
+  bool lastAlert = false;
+  bool pendingFall = false;
+  bool pendingClear = false;
+  bool reportedSensor = false;
+  bool haveReportedSensor = false;
 
   WiFiClient espClient;
   PubSubClient client;

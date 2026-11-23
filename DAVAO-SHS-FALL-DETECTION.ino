@@ -17,13 +17,16 @@ const uint8_t FALL_BUTTON_PIN = 26;
 const unsigned long MPU_SAMPLE_INTERVAL_MS = 100;
 const unsigned long SENSOR_REPORT_INTERVAL_MS = 2000;
 const unsigned long ALERT_COOLDOWN_MS = 5000;
+const unsigned long ALERT_DISPLAY_MS = 10000;
 
 bool mpuReady = false;
+bool alertActive = false;
 bool lastSosPressed = false;
 bool lastFallButtonPressed = false;
 unsigned long lastMpuSample = 0;
 unsigned long lastSensorReport = 0;
 unsigned long lastFallAlert = 0;
+unsigned long alertStartedAt = 0;
 float latestX = 0.0f;
 float latestY = 0.0f;
 float latestZ = 0.0f;
@@ -85,16 +88,24 @@ void loop() {
 
   mqttBroker.loop();
 
+  if (alertActive && now - alertStartedAt >= ALERT_DISPLAY_MS) {
+    alertActive = false;
+  }
+
   bool sosPressed = digitalRead(SOS_BUTTON_PIN) == LOW;
   bool fallButtonPressed = digitalRead(FALL_BUTTON_PIN) == LOW;
 
   if (sosPressed && !lastSosPressed) {
     Serial.println("SOS button pressed!");
     lora.sendNotify("SOS_BUTTON");
+    alertActive = true;
+    alertStartedAt = now;
   }
   if (fallButtonPressed && !lastFallButtonPressed) {
     Serial.println("Fall Alert button pressed!");
     lora.sendNotify("FALL_BUTTON");
+    alertActive = true;
+    alertStartedAt = now;
   }
 
   lastSosPressed = sosPressed;
@@ -112,10 +123,8 @@ void loop() {
           (lastFallAlert == 0 || now - lastFallAlert >= ALERT_COOLDOWN_MS)) {
         Serial.println("FALL DETECTED! Sending warning.");
         lora.sendNotify("FALL_MPU6050");
-
-        char fallEventId[48];
-        snprintf(fallEventId, sizeof(fallEventId), "FALL_MPU6050|%lu", now);
-        mqttBroker.publishFallEvent(fallEventId);
+        alertActive = true;
+        alertStartedAt = now;
         lastFallAlert = now;
       }
     } else {
@@ -133,6 +142,13 @@ void loop() {
     Serial.println(payload);
     lora.sendNotify(payload);
   }
+
+  // Broker publish (booleans only, to patient/status -> Node-RED -> Supabase):
+  //   alertActive (SOS, fall button, or MPU fall)  -> hasFall = true
+  //   sensorFallActive (MPU6050 fall only)         -> enabled_sensor = true
+  // lastFallAlert is only set when the MPU6050 detects a fall, so it identifies the sensor event.
+  const bool sensorFallActive = lastFallAlert != 0 && (now - lastFallAlert) < ALERT_DISPLAY_MS;
+  mqttBroker.updatePatientStatus(alertActive, sensorFallActive);
 
   delay(5);
 }
